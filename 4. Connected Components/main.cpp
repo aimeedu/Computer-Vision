@@ -171,9 +171,9 @@ class CClabel{
     }
 
     void connect8Pass1(){
-        for (int i=1; i<zeroFramedAry.length; i++){
-            for (int j=1; j<zeroFramedAry.length; j++){
-                int count = 0
+        for (int i=1; i<zeroFramedAry.length-1; i++){
+            for (int j=1; j<zeroFramedAry[0].length-1; j++){
+                int count = 0;
                 if (p[i][j] > 0) {
                     vector<int> neighbor;
                     neighbor.push_back(p[i-1][j-1]);
@@ -181,22 +181,22 @@ class CClabel{
                     neighbor.push_back(p[i-1][j+1]);
                     neighbor.push_back(p[i][j-1]);
                    
-                    int temp_min = 1000;
+                    int minLabel = 1000;
                     for (int k=0; k<neighbor.length;k++){
                         if (neighbor[i] != 0) {
-                            temp_min = std::min(neighbor[i], temp);
+                            minLabel = std::min(neighbor[i], minLabel);
                             count++;
                         }
                     }
-                    if (count != 0){
-                        p[i][j] = temp_min;
+                    if (count != 0){ // case 2 and 3
+                        p[i][j] = minLabel;
                         // update EQAry
                         for(int k=0; k<neighbor.length; d++){
                             if (neighbor[i] > p[i][j]){
                                 EQAry[neighbor[i]] = p[i][j];
                             }
                         }
-                    }else{
+                    }else{ // case 1
                         newLabel++;
                         p[i][j] = newLabel;
                         // update EQAry
@@ -208,7 +208,35 @@ class CClabel{
     }
 
     void connect8Pass2(){
+        for (int i=zeroFramedAry.length-2; i>0; i--){
+            for (int j=zeroFramedAry[0].length-2; j>0; j--){
+                if (p[i][j] > 0) {
+                    vector<int> neighbor;
+                    // neighbor.push_back(p[i][j]);
+                    neighbor.push_back(p[i-1][j-1]);
+                    neighbor.push_back(p[i-1][j]);
+                    neighbor.push_back(p[i-1][j+1]);
+                    neighbor.push_back(p[i][j-1]);
 
+                    int minLabel = 1000;
+                    int diff = 0;
+                    for (int k=0; k<neighbor.length; k++){
+                        if (neighbor[i] != 0 && neighbor[i] != p[i][j]){ // case 3
+                            minLabel = std::min(neighbor[i], minLabel);
+                            diff++;
+                        }
+                    }
+                    if(diff != 0){
+                        if (p[i][j] > minLabel){
+                            EQAry[p[i][j]] = minLabel;
+                            p[i][j] = minLabel;
+                        }
+                    }
+
+                }
+                
+            }
+        }
     }
 
     void connect4Pass1(){
