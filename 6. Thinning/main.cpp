@@ -1,8 +1,8 @@
-using namespace std;
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <cstdlib>
+using namespace std;
 
 class Thinning{
     public:
@@ -53,33 +53,132 @@ class Thinning{
     }
 
     void copyArys(){
+        for (int i=1; i<=numRows; i++){
+            for (int j=1; j<numCols; j++){
+                aryOne[i][j] = aryTwo[i][j];
+            }
+        }
+    }
 
+    bool exceedNeighbors(int i, int j, int max){
+        int count = 0;
+        for(int k=i-1; k<=i+1; k++){
+            for(int d=j-1; d<=j+1; d++){
+                if(k == i && d == j) continue;
+                if(count >= max) return true;
+                if(aryOne[k][d]>0) count++;
+            }
+        }
+        return false;
+    }
+
+    bool isConnector(int i, int j){
+        // check for 6 cases
+        int L = aryOne[i][j-1];
+        int R = aryOne[i][j+1];
+        int T = aryOne[i-1][j];
+        int B = aryOne[i+1][j];
+        int TL = aryOne[i-1][j-1];
+        int TR = aryOne[i-1][j+1];
+        int BL = aryOne[i+1][j-1];
+        int BR = aryOne[i+1][j+1];
+        // case 1
+        if(L==0 && R==0){
+            if((T==1 || TL==1 || TR==1) && (B==1 || BL==1 || BR==1)) return true;
+        }
+        // case 2
+        if(T==0 && B==0){
+            if((TL==1 || L==1 || BL==1) && (TR==1 || R==1 || BR==1)) return true;
+        }
+        // case alpha
+        if(T==0 && L==0 && TL==1) return true;
+        // case beta
+        if(L==0 && B==0 && BL==1) return true;
+        // case gamma
+        if(T==0 && R==0 && TR==1) return true;
+        // case delta
+        if(R==0 && B==0 && BR==1) return true;
+
+        return false;
     }
 
     void NorthThinning(){
-
+        for (int i=1; i<=numRows; i++){
+            for (int j=1; j<=numCols; j++){
+                if(aryOne[i][j] > 0){
+                    // check 3 conditions                    
+                    if(aryOne[i-1][j]==0 && exceedNeighbors(i, j, 4) && !isConnector(i,j)){
+                        aryTwo[i][j] = 0;
+                        changeflag++;
+                    }else{
+                        aryTwo[i][j] = 1;
+                    }
+                    cout <<"changeflag : " << changeflag << ", aryTwo[i][j]: " << aryTwo[i][j] << endl;
+                }
+            }
+        }
+        copyArys();
     }
 
     void SouthThinning(){
-
+        for (int i=1; i<=numRows; i++){
+            for (int j=1; j<=numCols; j++){
+                if(aryOne[i][j] > 0){
+                    // check 3 conditions                    
+                    if(aryOne[i+1][j]==0 && exceedNeighbors(i, j, 4) && !isConnector(i,j)){
+                        aryTwo[i][j] = 0;
+                        changeflag++;
+                    }else{
+                        aryTwo[i][j] = 1;
+                    }
+                }
+            }
+        }
+        copyArys();
     }
 
     void WestThinning(){
-
+        for (int i=1; i<=numRows; i++){
+            for (int j=1; j<=numCols; j++){
+                if(aryOne[i][j] > 0){
+                    // check 3 conditions                    
+                    if(aryOne[i][j-1]==0 && exceedNeighbors(i, j, 3) && !isConnector(i,j)){
+                        aryTwo[i][j] = 0;
+                        changeflag++;
+                    }else{
+                        aryTwo[i][j] = 1;
+                    }
+                }
+            }
+        }
+        copyArys();
     }
 
     void EastThinning(){
-
+        for (int i=1; i<=numRows; i++){
+            for (int j=1; j<=numCols; j++){
+                if(aryOne[i][j] > 0){
+                    // check 3 conditions                    
+                    if(aryOne[i][j+1]==0 && exceedNeighbors(i, j, 3) && !isConnector(i,j)){
+                        aryTwo[i][j] = 0;
+                        changeflag++;
+                    }else{
+                        aryTwo[i][j] = 1;
+                    }
+                }
+            }
+        }
+        copyArys();
     }
 
-    void reformatPrettyPrint(ofstream &w, string title){ // only print array one.
+    void reformatPrettyPrint(int**& arr, ofstream &w, string title){ // only print array one.
         w << title << "Cycle - " << cycleCount << endl;
         for(int i=1; i<=numRows; i++){
             for(int j=1; j<=numCols; j++){
-                if(aryOne[i][j] == 0){
+                if(arr[i][j] == 0){
                     w << "  ";
                 }else{
-                    w << aryOne[i][j] << " ";
+                    w << arr[i][j] << " ";
                 }
             }
             w << endl;
@@ -111,9 +210,10 @@ int main(int argc, const char* argv[]){
         img->cycleCount = 0;
 
         // step 4
-        img->reformatPrettyPrint(output2, "Image before Thinning: ");
-
-        while(img->changeflag > 0){
+        img->reformatPrettyPrint(img->aryOne, output2, "Image before Thinning: ");
+        int count = 0;
+        do{
+            cout << "cycleCount: - "<<  img->cycleCount << endl;
             // step 5
             img->changeflag = 0;
 
@@ -133,10 +233,15 @@ int main(int argc, const char* argv[]){
             img->cycleCount++;
 
             // step 11
-            img->reformatPrettyPrint(output2, "Result of Thinning: ");
+            img->reformatPrettyPrint(img->aryOne, output2, "Result of Thinning: ");
+            cout << "changeflag: "<< img->changeflag << endl;
             // step 12 repeat 5-11
-        }
+            count++;
+        // }while(count < 2);
+        }while(img->changeflag > 0);
+
         // step 13 -> output the final result to file 1.
+        img->reformatPrettyPrint(img->aryTwo, output1, "Final Result of Thinning: ");
 
         img->free_heap();
     }else {
