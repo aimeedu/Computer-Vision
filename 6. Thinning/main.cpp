@@ -22,6 +22,10 @@ class Thinning{
     void read_header(ifstream &input){
         input >> numRows >> numCols >> minVal >> maxVal;
     }
+        
+    void write_header(ofstream &w){
+        w << numRows<< " " << numCols<< " " << minVal << " " << maxVal << endl;
+    }
 
     // take cares of zeroFrame. p = 2, extra columns or rows
     void init2D(int**& arr, int p){ 
@@ -113,7 +117,6 @@ class Thinning{
                     }else{
                         aryTwo[i][j] = 1;
                     }
-                    cout <<"changeflag : " << changeflag << ", aryTwo[i][j]: " << aryTwo[i][j] << endl;
                 }
             }
         }
@@ -172,7 +175,12 @@ class Thinning{
     }
 
     void reformatPrettyPrint(int**& arr, ofstream &w, string title){ // only print array one.
-        w << title << "Cycle - " << cycleCount << endl;
+        
+        if(title != "Final Result of Thinning: ") w << title << "Cycle - " << cycleCount << endl;
+        else{
+            w << title << endl;
+            write_header(w);
+        }
         for(int i=1; i<=numRows; i++){
             for(int j=1; j<=numCols; j++){
                 if(arr[i][j] == 0){
@@ -211,9 +219,7 @@ int main(int argc, const char* argv[]){
 
         // step 4
         img->reformatPrettyPrint(img->aryOne, output2, "Image before Thinning: ");
-        int count = 0;
         do{
-            cout << "cycleCount: - "<<  img->cycleCount << endl;
             // step 5
             img->changeflag = 0;
 
@@ -234,10 +240,8 @@ int main(int argc, const char* argv[]){
 
             // step 11
             img->reformatPrettyPrint(img->aryOne, output2, "Result of Thinning: ");
-            cout << "changeflag: "<< img->changeflag << endl;
+
             // step 12 repeat 5-11
-            count++;
-        // }while(count < 2);
         }while(img->changeflag > 0);
 
         // step 13 -> output the final result to file 1.
