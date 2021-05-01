@@ -13,25 +13,36 @@ public class Main{
             // output 
             BufferedWriter chianCodeFile = new BufferedWriter(new FileWriter(chainCode_name));
             BufferedWriter boundaryFile = new BufferedWriter(new FileWriter(boundary_name));
+            // open the chianCodeFile
+            Scanner chianCodeFileReader = new Scanner(new BufferedReader(new FileReader(chainCode_name)));
             ){  // step 0
+                int f=1; // frame size.
                 // Read and store image header info.
                 int header[] = new int[4];
                 for (int i=0; i<4; i++){
                     if(labelFile.hasNextInt()) header[i] = labelFile.nextInt();
                 }               
                 Image img = new Image(header[0], header[1], header[2], header[3]);   
+                img.write_header(chianCodeFile);
+                img.write_header(boundaryFile);
                 img.loadImg(labelFile);
-            
+                
+                // dynamically allocated CCAry and boundaryAry.
+                int[][] CCAry = new int[header[0] + 2*f][header[1] + 2*f];
+                int[][] boundaryAry = new int[header[0] + 2*f][header[1] + 2*f];
                 // Read and store connect component properties.
                 int pp_header[] = new int[4];
                 for (int i=0; i<4; i++){
                     if(propFile.hasNextInt()) pp_header[i] = propFile.nextInt();
                 }
-                if(propFile.hasNextInt()) int numCC = propFile.nextInt();
-                CC cc = new CC(numCC);
+                CC cc = new CC();
+                if(propFile.hasNextInt()) cc.numCC = propFile.nextInt();
+
+                ChainCode code = new ChainCode();
 
                 // step 2 - 6
-                while(propFile.hasNextInt() && numCC>0){
+                while(propFile.hasNextInt()){
+                    // System.out.print("once per cc!");
                     int[] pp = new int[6]; // store the property for each connect conponent.
                     for (int i=0; i<6; i++){
                         if(propFile.hasNextInt()) pp[i] = propFile.nextInt();
@@ -43,19 +54,14 @@ public class Main{
                     cc.maxRow = pp[4];
                     cc.maxCol = pp[5];
 
-                    img.clearCCAry();
-                    img.loadCCAry(cc.label);
-                    img.getChainCode();
-
-                    numCC--;
+                    img.clearCCAry(CCAry);
+                    img.loadCCAry(cc.label, CCAry);
+                    code.getChainCode(cc, CCAry, f, chianCodeFile);
                 }
                 // 7 
                 chianCodeFile.close();
-                // 8
-                chianCodeFile.open();
-                // 9
-                // img.constructBoundary();
-
+                // 8,9
+                code.constructBoundary(chianCodeFileReader, boundaryFile, boundaryAry);
                 // 10
                 chianCodeFile.close();
                 boundaryFile.close();
@@ -67,9 +73,6 @@ class Image {
     // fields
     int numRows, numCols, minVal, maxVal;
     int[][] imageAry;
-    int[][] boundaryAry;
-    int[][] CCAry;
-    // frame size, 
     int f = 1; 
 
     // constructor
@@ -79,8 +82,6 @@ class Image {
         this.minVal = minVal;
         this.maxVal = maxVal;        
         this.imageAry = new int[this.numRows + 2*f][this.numCols + 2*f];
-        this.boundaryAry = new int[this.numRows + 2*f][this.numCols + 2*f];
-        this.CCAry = new int[this.numRows + 2*f][this.numCols + 2*f];
     }
 
     // methods
@@ -96,17 +97,20 @@ class Image {
         }
     }
 
+    void write_header(BufferedWriter output) throws IOException {
+        output.write(Integer.toString(numRows) + " " + Integer.toString(numCols) + " ");
+        output.write(Integer.toString(minVal) + " " + Integer.toString(maxVal) + "\n");
+    }
+
     void zeroFramed(){ // zero2DAry, set a 2D array to all 0.
         this.imageAry = new int[this.numRows + 2*f][this.numCols + 2*f];
-        this.boundaryAry = new int[this.numRows + 2*f][this.numCols + 2*f];
-        this.CCAry = new int[this.numRows + 2*f][this.numCols + 2*f];
     }
 
-    void clearCCAry() {
-        this.CCAry = new int[this.numRows + 2*f][this.numCols + 2*f];
+    void clearCCAry(int[][] CCAry) {
+        CCAry = new int[this.numRows + 2*f][this.numCols + 2*f];
     }
 
-    void loadCCAry(int label){
+    void loadCCAry(int label, int[][] CCAry){
         for (int i=f; i<numRows+f; i++){
             for (int j=f; j<numCols+f; j++){
                 if(imageAry[i][j] == label){
@@ -115,155 +119,191 @@ class Image {
             }
         }
     }
-
-    void aryToFile(int [][] arr, BufferedWriter output) throws IOException {
-        output.write(Integer.toString(numRows) + " " + Integer.toString(numCols) + " ");
-        output.write(Integer.toString(minVal) + " " + Integer.toString(maxVal) + "\n");
-        for(int i=f; i<arr.length+f; i++){
-            for(int j=f; j<arr[0].length+f; j++){
-                    output.write(Integer.toString(arr[i][j]) + " ");                
-            }
-            output.write("\n");
-        }
-    }
 }
 
 class CC {
     // fields
-    int numCC;
+    int numCC=0;
     int label, numbpixels, minRow, minCol, maxRow, maxCol; // bounding box
-    
-    // constructor
-    public CC(int numCC) {
-        this.numCC = numCC;
-    }
 }
 
 class Point {
     int row, col;
+
     public Point(int row, int col){
         this.row = row;
         this.col = col;
     }
 }
 
-class chainCode {
+class ChainCode {
     // a point array of size 8
-    Point[] neighborCoord;
+    int[][] neighborCoord = {{0,1},{-1,1},{-1,0}, {-1,-1}, {0,-1}, {1,-1}, {1,0},{1,1}};
     int[] zeroTable = {6,0,0,2,2,4,4,6};
     Point startP, currentP, nextP;
     int lastZero; // direction of last 0 on current p. 
     int nextDir; // direction of current p's neighbor form lastZero position. (lastZero+1) %8?
     int PchainDir;  // chain direction from current p to next p. this is what we write in the chain in the end.
     
-    // constructors
-    public chainCode(){
-        // neighborCoord = new Point[8];
-        // neighborCoord[0] = new Point(0, 1);
-        // neighborCoord[1] = new Point(-1, 1);
-        // neighborCoord[2] = new Point(-1, 0);
-        // neighborCoord[3] = new Point(-1, -1);
-        // neighborCoord[4] = new Point(0, -1);
-        // neighborCoord[5] = new Point(1, -1);
-        // neighborCoord[6] = new Point(1, 0);
-        // neighborCoord[7] = new Point(1, 1);
+    public ChainCode(){
     }
-
     // methods
-    void getChainCode(CC cc, int[][] CCAry, int f, BufferedWriter chianCodeFile){
+    void getChainCode(CC cc, int[][] CCAry, int f, BufferedWriter chianCodeFile) throws IOException{
         // for loop is only for finding the starting point.
-        int i, j;
-        for (i=f; i<CCAry.numRows+f; i++){
-            for (j=f; j<CCAry.numCols+f; j++){
+        int i = 1;
+        int j = 1;
+        outerloop:
+        for (i=1; i<CCAry.length-f; i++){
+            for (j=1; j<CCAry[0].length-f; j++){
                 if (CCAry[i][j] == cc.label){
                     chianCodeFile.write(cc.label + " " + i + " " + j + "\n");
                     startP = new Point(i, j);
                     currentP = new Point(i, j);
                     lastZero = 4;
-                }
+                    break outerloop;
+                }              
             }
         }
-        while(CCAry[i][j] != cc.label * -1){
-            // the direction to start search.
-            nextDir = Math.mod(lastZero+1, 8);
-            // search for next p.
-            int[] vals = findNextP(i, j, nextDir);
+        final int starti = i;
+        final int startj = j;
+        int nexti;
+        int nextj;
+        do{
+            // System.out.print("("+ i + "," + j+")" + " ");
+            // System.out.println("lastZero cur: "+lastZero + " ");
+            int[] vals = findNextP(i, j, lastZero, CCAry);
             PchainDir = vals[0];
-            int nexti = vals[1];
-            int nextj = vals[2];
+            nexti = vals[1];
+            nextj = vals[2];
             nextP = new Point(nexti, nextj);
-
-            // mark as seen, flip the label to negative.
-            CCAry[i][j] = cc.label * -1;
+        
+            // System.out.println(", chain code: " + PchainDir + " ");
+ 
             chianCodeFile.write(PchainDir+" ");
-            lastZero = zaroTable[PchainDir-1];
-        }
+            
+            if (PchainDir == 0){
+                lastZero = zeroTable[7];
+            }else{
+                lastZero = zeroTable[PchainDir-1];
+            }
+            // System.out.println("lastZero next: "+lastZero + "\n");
+            i=nexti;
+            j=nextj;
+        }while((i != starti) || (j != startj));
+        chianCodeFile.write("\n");
     }
 
-    // Point[] loadNeighborsCoord(Point currentP){
-    //     Point[] nb = new Point[8];
-    //     for (int i=0; i<nb.length; i++){
-    //         Point t = neighborCoord[i];
-    //         nb[i] = Point(currentP.row+t.row, currentP.col+t.col); 
-    //     }
-    //     return nb;
-    // }
-
-    int[] findNextP(int i, int j, int direction){
-        int[] vals;
+    int[] findNextP(int i, int j, int direction, int[][]CCAry){
+        int[] vals = new int[3];
         int loop = 0;
+        ot:
         while(loop<8){
             direction = (++direction)%8;
             switch(direction){
                 case 0: 
                     if(CCAry[i][j+1]>0){
-                        vals = new int{0, i, j+1};
-                        break;
+                        // System.out.print(0+"*");
+                        vals[0] = 0;
+                        vals[1] = i;
+                        vals[2] = j+1;
+                        break ot;
                     }
                 case 1: 
                     if(CCAry[i-1][j+1]>0){
-                        vals = new int{1, i-1, j+1};
-                        break;
+                        // System.out.print(1+"*");
+                        vals[0] = 1;
+                        vals[1] = i-1;
+                        vals[2] = j+1;
+                        break ot;
                     }
                 case 2: 
                     if(CCAry[i-1][j]>0){
-                        vals = new int{2, i-1, j};
-                        break;
+                        // System.out.print(2+"*");
+                        vals[0] = 2;
+                        vals[1] = i-1;
+                        vals[2] = j;
+                        break ot;
                     }
                 case 3: 
                     if(CCAry[i-1][j-1]>0){
-                        vals = new int{3, i-1, j-1};
-                        break;
+                        // System.out.print(3+"*");
+                        vals[0] = 3;
+                        vals[1] = i-1;
+                        vals[2] = j-1;
+                        break ot;
                     }
                 case 4: 
                     if(CCAry[i][j-1]>0){
-                        vals = new int{4, i, j-1};
-                        break;
+                        // System.out.print(4+"*");
+                        vals[0] = 4;
+                        vals[1] = i;
+                        vals[2] = j-1;
+                        break ot;
                     }
                 case 5: 
                     if(CCAry[i+1][j-1]>0){
-                        vals = new int{5, i+1, j-1};
-                        break;
+                        // System.out.print(5+"*");
+                        vals[0] = 5;
+                        vals[1] = i+1;
+                        vals[2] = j-1;
+                        break ot;
                     }    
                 case 6: 
                     if(CCAry[i+1][j]>0){
-                        vals = new int{6, i+1, j};
-                        break;
+                        // System.out.print(6+"*");
+                        vals[0] = 6;
+                        vals[1] = i+1;
+                        vals[2] = j;
+                        break ot;
                     }
                 case 7: 
                     if(CCAry[i+1][j+1]>0){
-                        vals = new int{7, i+1, j+1};
-                        break;
-                    }
-                // default: 
-                //     break;              
+                        // System.out.print(7+"*");
+                        vals[0] = 7;
+                        vals[1] = i+1;
+                        vals[2] = j+1;
+                        break ot;
+                    }            
             }
             loop++;
         }
         return vals;
     }
 
-    void constructBoundary(){
+    void constructBoundary(Scanner input, BufferedWriter output, int[][] arr) throws IOException{
+        String hd = input.nextLine();
+        int index = 0;
+        int l=0, sti=0, stj=0;
+        while(input.hasNextLine()){
+            String line = input.nextLine();
+            String[] nums = line.split("\\s+");
 
+            if (index%2 == 0) { // starting point of each cc.
+                l = Integer.parseInt(nums[0]);
+                sti = Integer.parseInt(nums[1]);
+                stj = Integer.parseInt(nums[2]);
+
+            }else{ // odd line is the chian code
+                for (int k=0; k<nums.length; k++){
+                    int[] p = neighborCoord[Integer.parseInt(nums[k])];
+
+                    arr[sti+p[0]][stj+p[1]] = l;
+                    sti = sti+p[0];
+                    stj = stj+p[1];
+                    // System.out.println(sti + " "+ stj);
+                }
+            }
+            index++;
+        }
+        aryToFile(arr, output);
+    }
+
+    void aryToFile(int [][] arr, BufferedWriter output) throws IOException {
+        for(int i=1; i<arr.length-1; i++){
+            for(int j=1; j<arr[0].length-1; j++){
+                    output.write(Integer.toString(arr[i][j]) + " ");                
+            }
+            output.write("\n");
+        }
     }
 }
